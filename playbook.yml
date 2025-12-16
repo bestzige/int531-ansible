@@ -9,12 +9,13 @@
     proxmox_api_user: root@pam
     proxmox_api_password: int53108
     proxmox_storage: local-lvm
-    vm_target_ip: 10.13.104.100
+    vm_target_ip: 10.13.104.90
     ci_user: ansible
     ci_password: ansible_password
     ssh_pub_key: "{{ lookup('file', './ssh-keys/id_ansible.pub') }}"
     ssh_private_key: './ssh-keys/id_ansible'
     gateway: 10.13.104.254
+
   tasks:
     - name: Ping localhost
       ansible.builtin.ping:
@@ -84,25 +85,29 @@
       delegate_to: localhost
 
     - name: Wait for VM SSH to be reachable
-      ansible.builtin.wait_for:
-        host: '{{ vm_target_ip }}'
-        port: 22
-        delay: 10
-        timeout: 300
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 180
+
+    - name: Add the new VM to in-memory inventory
+      ansible.builtin.add_host:
+        name: '{{ vm_target_ip }}'
+        ansible_user: '{{ ci_user }}'
+        ansible_ssh_private_key_file: '{{ ssh_private_key }}'
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        groups: new_vms
 
 - name: Configure the new VM
-  hosts: '{{ vm_target_ip }}'
+  hosts: new_vms
   gather_facts: true
   become: true
   vars:
-    ansible_user: ansible
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-    ansible_ssh_private_key_file: './ssh-keys/id_ansible'
     repo_url: 'https://github.com/bestzige/int531-demo.git'
     app_dir: '/home/app'
+
   tasks:
     - name: Update apt cache and install Docker
-      apt:
+      ansible.builtin.apt:
         name:
           - docker.io
           - docker-compose-plugin
