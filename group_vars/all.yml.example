@@ -1,7 +1,7 @@
-proxmox_api_host: 10.13.104.218
+proxmox_api_host: 'YOUR_PROXMOX_API_HOST'
 proxmox_api_user: root@pam
-proxmox_api_password: int53108
-proxmox_node: blade-server08
+proxmox_api_password: 'CHANGE_ME'
+proxmox_node: 'YOUR_NODE_NAME'
 proxmox_storage: local-lvm
 proxmox_template: ubuntu-cloud-template
 
