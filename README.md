@@ -7,7 +7,7 @@
 1. **Generate SSH keys**:
 
 ```bash
-bash ssh-key-gen.sh
+ssh-keygen -t ed25519 -C "[vmUser]@[vmIP]" -f ./ssh-keys/id_ansible -N ""
 ```
 
 2. **Run ansible playbook**:
