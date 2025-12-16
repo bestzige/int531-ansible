@@ -1,68 +1,138 @@
-- name: Provision VMs on Proxmox and add to inventory
-  hosts: proxmox
+- name: Set up virtual machine on Proxmox
+  hosts: localhost
   gather_facts: false
-  vars_files:
-    - vars/all.yml
   vars:
-    proxmox_key_name: 'ansible_ed25519'
-    proxmox_key_dir: '{{ playbook_dir }}/roles/proxmox/files'
-    ansible_ssh_private_key_file: '{{ proxmox_key_dir }}/{{ proxmox_key_name }}'
-    ansible_user: '{{ proxmox_vm_ci_user }}'
-
+    vm_name: bestzige-vm-01
+    vm_template: ubuntu-cloud-template
+    proxmox_node: blade-server08
+    proxmox_api_host: 10.13.104.218
+    proxmox_api_user: root@pam
+    proxmox_api_password: int53108
+    proxmox_storage: local-lvm
+    vm_target_ip: 10.13.104.100
+    ci_user: ansible
+    ci_password: ansible_password
+    ssh_pub_key: "{{ lookup('file', './ssh-keys/id_ansible.pub') }}"
+    ssh_private_key: './ssh-keys/id_ansible'
+    gateway: 10.13.104.254
   tasks:
-    - name: Provision each VM
-      ansible.builtin.include_role:
-        name: proxmox
-      vars:
-        proxmox_vm_index: '{{ item.index }}'
-        proxmox_vm: '{{ item }}'
-      loop: '{{ proxmox_vms }}'
-      loop_control:
-        loop_var: item
-      register: clone_results
+    - name: Ping localhost
+      ansible.builtin.ping:
 
-    - name: Wait for all VMs to become reachable via SSH
-      ansible.builtin.wait_for:
-        host: '{{ vm_network.subnet }}.{{ vm_network.start_ip + item.item.index }}'
-        port: 22
-        timeout: 180
+    - name: Get VM current state
+      community.proxmox.proxmox_kvm:
+        api_user: '{{ proxmox_api_user }}'
+        api_password: '{{ proxmox_api_password }}'
+        api_host: '{{ proxmox_api_host }}'
+        node: '{{ proxmox_node }}'
+        name: '{{ vm_name }}'
+        state: current
+      register: vm_info
+      ignore_errors: true
+      delegate_to: localhost
+
+    - block:
+        - name: Stop VM if running
+          community.proxmox.proxmox_kvm:
+            api_user: '{{ proxmox_api_user }}'
+            api_password: '{{ proxmox_api_password }}'
+            api_host: '{{ proxmox_api_host }}'
+            node: '{{ proxmox_node }}'
+            name: '{{ vm_name }}'
+            state: stopped
+            force: true
+
+        - name: Remove VM
+          community.proxmox.proxmox_kvm:
+            api_user: '{{ proxmox_api_user }}'
+            api_password: '{{ proxmox_api_password }}'
+            api_host: '{{ proxmox_api_host }}'
+            node: '{{ proxmox_node }}'
+            name: '{{ vm_name }}'
+            state: absent
+      when: vm_info.vmid is defined
+      delegate_to: localhost
+
+    - name: Clone and create VM
+      community.proxmox.proxmox_kvm:
+        api_user: '{{ proxmox_api_user }}'
+        api_password: '{{ proxmox_api_password }}'
+        api_host: '{{ proxmox_api_host }}'
+        clone: '{{ vm_template }}'
+        name: '{{ vm_name }}'
+        node: '{{ proxmox_node }}'
+        storage: '{{ proxmox_storage }}'
+        format: qcow2
+        timeout: 100
+      register: new_vm
+      delegate_to: localhost
+
+    - name: Configure cloud-init and start VM
+      community.proxmox.proxmox_kvm:
+        api_user: '{{ proxmox_api_user }}'
+        api_password: '{{ proxmox_api_password }}'
+        api_host: '{{ proxmox_api_host }}'
+        node: '{{ proxmox_node }}'
+        name: '{{ vm_name }}'
+        ciuser: '{{ ci_user }}'
+        cipassword: '{{ ci_password }}'
+        sshkeys: '{{ ssh_pub_key }}'
+        ipconfig:
+          ipconfig0: 'ip={{ vm_target_ip }}/24,gw={{ gateway }}'
+        update: true
         state: started
-      loop: '{{ clone_results.results }}'
-      loop_control:
-        label: '{{ item.item.name }}'
+      delegate_to: localhost
 
-    - name: Add VMs to dynamic inventory
-      ansible.builtin.add_host:
-        name: '{{ item.item.name }}'
-        groups: vm
-        ansible_host: '{{ vm_network.subnet }}.{{ vm_network.start_ip + item.item.index }}'
-        ansible_user: '{{ ansible_user }}'
-        ansible_ssh_private_key_file: '{{ ansible_ssh_private_key_file }}'
-        ansible_ssh_common_args: '{{ ansible_ssh_common_args }}'
-      loop: '{{ clone_results.results }}'
-      loop_control:
-        label: '{{ item.item.name }}'
+    - name: Wait for VM SSH to be reachable
+      ansible.builtin.wait_for:
+        host: '{{ vm_target_ip }}'
+        port: 22
+        delay: 10
+        timeout: 300
 
-- name: Base VM configuration
-  hosts: vm
-  become: true
+- name: Configure the new VM
+  hosts: '{{ vm_target_ip }}'
   gather_facts: true
-  vars_files:
-    - vars/all.yml
-  serial: 5
-  tasks:
-    - name: Apply VM base role (Docker, etc.)
-      ansible.builtin.include_role:
-        name: vm
-
-- name: Deploy application
-  hosts: vm
   become: true
-  gather_facts: false
-  vars_files:
-    - vars/all.yml
-  serial: 5
+  vars:
+    ansible_user: ansible
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_ssh_private_key_file: './ssh-keys/id_ansible'
+    repo_url: 'https://github.com/bestzige/int531-demo.git'
+    app_dir: '/home/app'
   tasks:
-    - name: Apply deploy_app role
-      ansible.builtin.include_role:
-        name: deploy_app
+    - name: Update apt cache and install Docker
+      apt:
+        name:
+          - docker.io
+          - docker-compose-plugin
+          - docker-buildx-plugin
+        state: latest
+        update_cache: true
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Clone repository
+      ansible.builtin.git:
+        repo: '{{ repo_url }}'
+        dest: '{{ app_dir }}'
+        version: main
+        update: true
+
+    - name: Copy env file
+      ansible.builtin.copy:
+        src: '{{ app_dir }}/.env.example'
+        dest: '{{ app_dir }}/.env'
+        remote_src: true
+        force: false
+        mode: '0600'
+
+    - name: Run docker compose
+      community.docker.docker_compose_v2:
+        project_src: '{{ app_dir }}'
+        state: present
+        build: always

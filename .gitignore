@@ -61,4 +61,5 @@ terraform.tfvars
 tmp/
 temp/
 *.tmp
-group_vars/all.yml
+
+/ssh-keys

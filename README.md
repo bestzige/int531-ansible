@@ -7,16 +7,14 @@
 1. **Generate SSH keys**:
 
 ```bash
-bash bash/ssh-key-gen.sh
+bash ssh-key-gen.sh
 ```
 
-2. **Copy `all.yml.example` to `all.yml`**:
+2. **Run ansible playbook**:
 
 ```bash
-cp group_vars/all.yml.example group_vars/all.yml
+ansible-playbook -i inventory.ini playbook.yml
 ```
-
-3. **Configure Variables** in `group_vars/all.yml`:
 
 ---
 
@@ -28,15 +26,3 @@ Follow the detailed instructions in this Google Doc:
 Related repository: [SRE-Ansible by Phasit Udompanish](https://github.com/PasitU/SRE-Ansible)
 
 **Special thanks to [Phasit Udompanish](https://github.com/PasitU) for the original documentation.**
-
----
-
-## Provision VMs
-
-Run the main script:
-
-```bash
-bash start.sh
-```
-
-# int531-ansible
