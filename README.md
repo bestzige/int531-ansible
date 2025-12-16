@@ -10,7 +10,13 @@
 bash bash/ssh-key-gen.sh
 ```
 
-2. **Configure Variables** in `group_vars/all.yml`:
+2. **Copy `all.yml.example` to `all.yml`**:
+
+```bash
+cp group_vars/all.yml.example group_vars/all.yml
+```
+
+3. **Configure Variables** in `group_vars/all.yml`:
 
 ---
 
@@ -32,4 +38,5 @@ Run the main script:
 ```bash
 bash start.sh
 ```
+
 # int531-ansible

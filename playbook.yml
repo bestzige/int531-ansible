@@ -1,0 +1,68 @@
+- name: Provision VMs on Proxmox and add to inventory
+  hosts: proxmox
+  gather_facts: false
+  vars_files:
+    - vars/all.yml
+  vars:
+    proxmox_key_name: 'ansible_ed25519'
+    proxmox_key_dir: '{{ playbook_dir }}/roles/proxmox/files'
+    ansible_ssh_private_key_file: '{{ proxmox_key_dir }}/{{ proxmox_key_name }}'
+    ansible_user: '{{ proxmox_vm_ci_user }}'
+
+  tasks:
+    - name: Provision each VM
+      ansible.builtin.include_role:
+        name: proxmox
+      vars:
+        proxmox_vm_index: '{{ item.index }}'
+        proxmox_vm: '{{ item }}'
+      loop: '{{ proxmox_vms }}'
+      loop_control:
+        loop_var: item
+      register: clone_results
+
+    - name: Wait for all VMs to become reachable via SSH
+      ansible.builtin.wait_for:
+        host: '{{ vm_network.subnet }}.{{ vm_network.start_ip + item.item.index }}'
+        port: 22
+        timeout: 180
+        state: started
+      loop: '{{ clone_results.results }}'
+      loop_control:
+        label: '{{ item.item.name }}'
+
+    - name: Add VMs to dynamic inventory
+      ansible.builtin.add_host:
+        name: '{{ item.item.name }}'
+        groups: vm
+        ansible_host: '{{ vm_network.subnet }}.{{ vm_network.start_ip + item.item.index }}'
+        ansible_user: '{{ ansible_user }}'
+        ansible_ssh_private_key_file: '{{ ansible_ssh_private_key_file }}'
+        ansible_ssh_common_args: '{{ ansible_ssh_common_args }}'
+      loop: '{{ clone_results.results }}'
+      loop_control:
+        label: '{{ item.item.name }}'
+
+- name: Base VM configuration
+  hosts: vm
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/all.yml
+  serial: 5
+  tasks:
+    - name: Apply VM base role (Docker, etc.)
+      ansible.builtin.include_role:
+        name: vm
+
+- name: Deploy application
+  hosts: vm
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/all.yml
+  serial: 5
+  tasks:
+    - name: Apply deploy_app role
+      ansible.builtin.include_role:
+        name: deploy_app

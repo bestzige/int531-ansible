@@ -1,0 +1,64 @@
+# =========================
+# Ansible
+# =========================
+*.retry
+*.log
+ansible.log
+.retry/
+
+# =========================
+# SSH keys (CRITICAL)
+# =========================
+# Private keys
+roles/**/files/*.key
+roles/**/files/*_rsa
+roles/**/files/*_ed25519
+roles/**/files/ansible_ed25519
+privatekey
+id_rsa
+id_ed25519
+
+# Public keys (optional: keep or ignore)
+# Comment out if you want to commit public keys
+roles/**/files/*.pub
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+*.vault
+vault.yml
+
+# =========================
+# Python / venv
+# =========================
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# =========================
+# Terraform (if added later)
+# =========================
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# =========================
+# Logs / Temp
+# =========================
+tmp/
+temp/
+*.tmp
+group_vars/all.yml
