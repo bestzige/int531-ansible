@@ -1,40 +1,29 @@
-- name: Check Proxmox API connectivity
-  ansible.builtin.ping:
-  changed_when: false
-
 - name: Get VM info from Proxmox
   community.proxmox.proxmox_vm_info:
-    api_host: '{{ proxmox_api_host }}'
-    api_user: '{{ proxmox_api_user }}'
-    api_password: '{{ proxmox_api_password }}'
-    node: '{{ proxmox_node }}'
   register: proxmox_vms
   changed_when: false
 
-- name: Build VM name -> VMID lookup
+- name: Build VM name > VMID lookup
   ansible.builtin.set_fact:
     proxmox_vm_lookup: >-
       {{ proxmox_vms.proxmox_vms
          | items2dict(key_name='name', value_name='vmid') }}
 
-- name: Resolve template VMID
+- name: Resolve template VM
   ansible.builtin.set_fact:
-    template_vmid: >-
-      {{ (
-           proxmox_vms.proxmox_vms
-           | selectattr('name', 'equalto', vm_template)
-           | selectattr('template', 'equalto', true)
-           | first
-         ).vmid }}
-  failed_when: template_vmid is not defined
+    template_vm: >-
+      {{ proxmox_vms.proxmox_vms
+         | selectattr('name', 'equalto', vm_template)
+         | selectattr('template', 'equalto', true)
+         | first }}
+
+- name: Fail if template not found
+  ansible.builtin.fail:
+    msg: 'Template {{ vm_template }} not found or not marked as template'
+  when: template_vm is not defined
 
 - name: Clone missing VMs from template
   community.proxmox.proxmox_kvm:
-    api_host: '{{ proxmox_api_host }}'
-    api_user: '{{ proxmox_api_user }}'
-    api_password: '{{ proxmox_api_password }}'
-    node: '{{ proxmox_node }}'
-
     clone: '{{ vm_template }}'
     newid: '{{ hostvars[item].vmid }}'
     name: '{{ hostvars[item].vm_name }}'
@@ -47,18 +36,12 @@
       ipconfig0: 'ip={{ hostvars[item].ansible_host }}/{{ vm_netmask }},gw={{ vm_gateway }}'
 
     state: present
-    timeout: 900
   loop: "{{ groups['vms'] }}"
-  when: item not in proxmox_vm_lookup
+  when: hostvars[item].vm_name not in proxmox_vm_lookup
   register: clone_results
 
-- name: Update existing VMs
+- name: Update existing VMs (cloud-init only)
   community.proxmox.proxmox_kvm:
-    api_host: '{{ proxmox_api_host }}'
-    api_user: '{{ proxmox_api_user }}'
-    api_password: '{{ proxmox_api_password }}'
-    node: '{{ proxmox_node }}'
-
     vmid: '{{ hostvars[item].vmid }}'
     name: '{{ hostvars[item].vm_name }}'
 
@@ -71,16 +54,11 @@
 
     update: true
     state: present
-    timeout: 900
   loop: "{{ groups['vms'] }}"
   register: update_results
 
 - name: Stop updated VMs
   community.proxmox.proxmox_kvm:
-    api_host: '{{ proxmox_api_host }}'
-    api_user: '{{ proxmox_api_user }}'
-    api_password: '{{ proxmox_api_password }}'
-    node: '{{ proxmox_node }}'
     vmid: '{{ hostvars[item.item].vmid }}'
     state: stopped
   loop: '{{ update_results.results }}'
@@ -88,10 +66,6 @@
 
 - name: Start updated VMs
   community.proxmox.proxmox_kvm:
-    api_host: '{{ proxmox_api_host }}'
-    api_user: '{{ proxmox_api_user }}'
-    api_password: '{{ proxmox_api_password }}'
-    node: '{{ proxmox_node }}'
     vmid: '{{ hostvars[item.item].vmid }}'
     state: started
   loop: '{{ update_results.results }}'

@@ -1,6 +1,21 @@
-- name: Proxmox VM Provision
+- name: Provision Proxmox VMs
   hosts: proxmox
   gather_facts: false
+
+  module_defaults:
+    community.proxmox.proxmox_kvm:
+      api_host: '{{ proxmox_api_host }}'
+      api_user: '{{ proxmox_api_user }}'
+      api_password: '{{ proxmox_api_password }}'
+      node: '{{ proxmox_node }}'
+      timeout: 900
+
+    community.proxmox.proxmox_vm_info:
+      api_host: '{{ proxmox_api_host }}'
+      api_user: '{{ proxmox_api_user }}'
+      api_password: '{{ proxmox_api_password }}'
+      node: '{{ proxmox_node }}'
+
   roles:
     - proxmox_vm
 
