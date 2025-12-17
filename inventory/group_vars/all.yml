@@ -1,0 +1,10 @@
+vm_netmask: 24
+vm_gateway: 10.13.104.254
+
+vm_user: ubuntu
+vm_password: ubuntu12345
+vm_ssh_private_key: '~/.ssh/id_rsa'
+vm_ssh_pubkey: '~/.ssh/id_rsa.pub'
+
+app_repo_url: 'https://github.com/bestzige/int531-demo.git'
+app_dir: /opt/app

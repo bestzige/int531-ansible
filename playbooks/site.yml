@@ -1,0 +1,21 @@
+- name: Proxmox VM Provision
+  hosts: proxmox
+  gather_facts: false
+  roles:
+    - proxmox_vm
+
+- name: Verify SSH connectivity
+  hosts: provisioned_vms
+  gather_facts: false
+  tasks:
+    - name: SSH works
+      ansible.builtin.ping:
+
+- name: Configure VMs
+  hosts: provisioned_vms
+  become: true
+  roles:
+    - update_apt
+    - ensure_docker
+    - node_exporter
+    - app_deploy

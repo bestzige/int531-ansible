@@ -1,0 +1,45 @@
+- name: Clone or update application repository
+  ansible.builtin.git:
+    repo: '{{ app_repo_url }}'
+    dest: '{{ app_dir }}'
+    version: main
+    update: true
+    force: true
+  register: git_result
+
+- name: Ensure .env file exists
+  ansible.builtin.copy:
+    src: '{{ app_dir }}/.env.example'
+    dest: '{{ app_dir }}/.env'
+    remote_src: true
+    mode: '0600'
+    force: false
+
+- name: Deploy application with Docker Compose v2
+  community.docker.docker_compose_v2:
+    project_src: '{{ app_dir }}'
+    state: present
+    pull: missing
+    build: policy
+    remove_orphans: true
+  when: git_result.changed
+
+- name: Get running Docker containers
+  community.docker.docker_container_info:
+    name: all
+  register: docker_containers
+  changed_when: false
+
+- name: Show running Docker containers
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        (
+          docker_containers.containers
+          | default(docker_containers.results, true)
+          | default([], true)
+        )
+        | map(attribute='Name')
+        | list
+      }}
+  changed_when: false

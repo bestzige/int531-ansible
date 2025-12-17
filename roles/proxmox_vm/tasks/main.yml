@@ -1,0 +1,103 @@
+- name: Check Proxmox API connectivity
+  ansible.builtin.ping:
+  changed_when: false
+
+- name: Get VM info
+  community.proxmox.proxmox_vm_info:
+    api_host: '{{ proxmox_api_host }}'
+    api_user: '{{ proxmox_api_user }}'
+    api_password: '{{ proxmox_api_password }}'
+    node: '{{ proxmox_node }}'
+  register: proxmox_vms
+  changed_when: false
+
+- name: Build VMID lookup
+  ansible.builtin.set_fact:
+    proxmox_vmids: >-
+      {{
+        proxmox_vms.proxmox_vms
+        | items2dict(key_name='vmid', value_name='name')
+      }}
+
+- name: Fail if template not found
+  ansible.builtin.fail:
+    msg: "Template '{{ vm_template }}' not found or not marked as template on node {{ proxmox_node }}"
+  when: >
+    proxmox_vms.proxmox_vms
+    | selectattr('name', 'equalto', vm_template)
+    | selectattr('template', 'equalto', true)
+    | list
+    | length == 0
+
+- name: Clone VMs from template (only if missing)
+  community.proxmox.proxmox_kvm:
+    api_host: '{{ proxmox_api_host }}'
+    api_user: '{{ proxmox_api_user }}'
+    api_password: '{{ proxmox_api_password }}'
+    node: '{{ proxmox_node }}'
+
+    clone: '{{ vm_template }}'
+    newid: '{{ hostvars[item].vmid }}'
+    name: '{{ hostvars[item].vm_name }}'
+
+    ciuser: '{{ vm_user }}'
+    cipassword: '{{ vm_password }}'
+    sshkeys: "{{ lookup('file', vm_ssh_pubkey) }}"
+
+    ipconfig:
+      ipconfig0: 'ip={{ hostvars[item].ansible_host }}/{{ vm_netmask }},gw={{ vm_gateway }}'
+
+    state: present
+    timeout: 900
+  loop: "{{ groups['vms'] }}"
+  when: hostvars[item].vmid | int not in proxmox_vmids
+
+- name: Update existing VMs
+  community.proxmox.proxmox_kvm:
+    api_host: '{{ proxmox_api_host }}'
+    api_user: '{{ proxmox_api_user }}'
+    api_password: '{{ proxmox_api_password }}'
+    node: '{{ proxmox_node }}'
+
+    vmid: '{{ hostvars[item].vmid }}'
+    name: '{{ hostvars[item].vm_name }}'
+
+    ciuser: '{{ vm_user }}'
+    cipassword: '{{ vm_password }}'
+    sshkeys: "{{ lookup('file', vm_ssh_pubkey) }}"
+
+    ipconfig:
+      ipconfig0: 'ip={{ hostvars[item].ansible_host }}/{{ vm_netmask }},gw={{ vm_gateway }}'
+
+    update: true
+    state: present
+    timeout: 900
+  loop: "{{ groups['vms'] }}"
+  when: hostvars[item].vmid | int in proxmox_vmids
+
+- name: Reboot VMs
+  community.proxmox.proxmox_kvm:
+    api_host: '{{ proxmox_api_host }}'
+    api_user: '{{ proxmox_api_user }}'
+    api_password: '{{ proxmox_api_password }}'
+    node: '{{ proxmox_node }}'
+    vmid: '{{ hostvars[item].vmid }}'
+    state: restarted
+    timeout: 900
+  loop: "{{ groups['vms'] }}"
+
+- name: Wait for SSH
+  ansible.builtin.wait_for:
+    host: '{{ hostvars[item].ansible_host }}'
+    port: 22
+    timeout: 600
+  loop: "{{ groups['vms'] }}"
+
+- name: Add provisioned VMs to inventory
+  ansible.builtin.add_host:
+    name: '{{ item }}'
+    groups: provisioned_vms
+    ansible_host: '{{ hostvars[item].ansible_host }}'
+    ansible_user: '{{ vm_user }}'
+    ansible_ssh_private_key_file: '{{ vm_ssh_private_key }}'
+  loop: "{{ groups['vms'] }}"
