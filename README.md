@@ -1,3 +1,5 @@
+@ -1,28 +0,0 @@
+
 # Proxmox VM Provisioning with Ansible
 
 ---
@@ -7,13 +9,19 @@
 1. **Generate SSH keys**:
 
 ```bash
-ssh-keygen -t ed25519 -C "[vmUser]@[vmIP]" -f ./ssh-keys/id_ansible -N ""
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
 ```
 
-2. **Run ansible playbook**:
+2. **Install Ansible and required collections**:
 
 ```bash
-ansible-playbook -i inventory.ini playbook.yml
+ansible-galaxy role install -r requirements.yml
+```
+
+3. **Run ansible playbook**:
+
+```bash
+ansible-playbook playbooks/site.yml -v
 ```
 
 ---

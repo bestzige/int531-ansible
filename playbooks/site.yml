@@ -1,0 +1,35 @@
+- name: Provision Proxmox VMs
+  hosts: proxmox
+  gather_facts: false
+
+  module_defaults:
+    community.proxmox.proxmox_kvm:
+      api_host: '{{ proxmox_api_host }}'
+      api_user: '{{ proxmox_api_user }}'
+      api_password: '{{ proxmox_api_password }}'
+      node: '{{ proxmox_node }}'
+      timeout: 900
+
+    community.proxmox.proxmox_vm_info:
+      api_host: '{{ proxmox_api_host }}'
+      api_user: '{{ proxmox_api_user }}'
+      api_password: '{{ proxmox_api_password }}'
+      node: '{{ proxmox_node }}'
+
+  roles:
+    - proxmox_vm
+
+- name: Verify SSH connectivity
+  hosts: provisioned_vms
+  gather_facts: false
+  tasks:
+    - name: SSH works
+      ansible.builtin.ping:
+
+- name: Configure VMs
+  hosts: provisioned_vms
+  become: true
+  roles:
+    - ensure_docker
+    - node_exporter
+    - app_deploy

@@ -1,0 +1,6 @@
+proxmox_api_host: 10.13.104.218
+proxmox_api_user: root@pam
+proxmox_api_password: int53108
+proxmox_node: blade-server08
+
+vm_template: ubuntu-cloud-template
