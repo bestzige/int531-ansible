@@ -1,5 +1,3 @@
-@ -1,28 +0,0 @@
-
 # Proxmox VM Provisioning with Ansible
 
 ---
