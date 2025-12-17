@@ -2,7 +2,7 @@
   ansible.builtin.ping:
   changed_when: false
 
-- name: Get VM info
+- name: Get VM info from Proxmox
   community.proxmox.proxmox_vm_info:
     api_host: '{{ proxmox_api_host }}'
     api_user: '{{ proxmox_api_user }}'
@@ -11,25 +11,24 @@
   register: proxmox_vms
   changed_when: false
 
-- name: Build VMID lookup
+- name: Build VM name -> VMID lookup
   ansible.builtin.set_fact:
-    proxmox_vmids: >-
-      {{
-        proxmox_vms.proxmox_vms
-        | items2dict(key_name='vmid', value_name='name')
-      }}
+    proxmox_vm_lookup: >-
+      {{ proxmox_vms.proxmox_vms
+         | items2dict(key_name='name', value_name='vmid') }}
 
-- name: Fail if template not found
-  ansible.builtin.fail:
-    msg: "Template '{{ vm_template }}' not found or not marked as template on node {{ proxmox_node }}"
-  when: >
-    proxmox_vms.proxmox_vms
-    | selectattr('name', 'equalto', vm_template)
-    | selectattr('template', 'equalto', true)
-    | list
-    | length == 0
+- name: Resolve template VMID
+  ansible.builtin.set_fact:
+    template_vmid: >-
+      {{ (
+           proxmox_vms.proxmox_vms
+           | selectattr('name', 'equalto', vm_template)
+           | selectattr('template', 'equalto', true)
+           | first
+         ).vmid }}
+  failed_when: template_vmid is not defined
 
-- name: Clone VMs from template (only if missing)
+- name: Clone missing VMs from template
   community.proxmox.proxmox_kvm:
     api_host: '{{ proxmox_api_host }}'
     api_user: '{{ proxmox_api_user }}'
@@ -50,7 +49,8 @@
     state: present
     timeout: 900
   loop: "{{ groups['vms'] }}"
-  when: hostvars[item].vmid | int not in proxmox_vmids
+  when: item not in proxmox_vm_lookup
+  register: clone_results
 
 - name: Update existing VMs
   community.proxmox.proxmox_kvm:
@@ -73,18 +73,29 @@
     state: present
     timeout: 900
   loop: "{{ groups['vms'] }}"
-  when: hostvars[item].vmid | int in proxmox_vmids
+  register: update_results
 
-- name: Reboot VMs
+- name: Stop updated VMs
   community.proxmox.proxmox_kvm:
     api_host: '{{ proxmox_api_host }}'
     api_user: '{{ proxmox_api_user }}'
     api_password: '{{ proxmox_api_password }}'
     node: '{{ proxmox_node }}'
-    vmid: '{{ hostvars[item].vmid }}'
-    state: restarted
-    timeout: 900
-  loop: "{{ groups['vms'] }}"
+    vmid: '{{ hostvars[item.item].vmid }}'
+    state: stopped
+  loop: '{{ update_results.results }}'
+  when: item.changed
+
+- name: Start updated VMs
+  community.proxmox.proxmox_kvm:
+    api_host: '{{ proxmox_api_host }}'
+    api_user: '{{ proxmox_api_user }}'
+    api_password: '{{ proxmox_api_password }}'
+    node: '{{ proxmox_node }}'
+    vmid: '{{ hostvars[item.item].vmid }}'
+    state: started
+  loop: '{{ update_results.results }}'
+  when: item.changed
 
 - name: Wait for SSH
   ansible.builtin.wait_for:
@@ -92,8 +103,9 @@
     port: 22
     timeout: 600
   loop: "{{ groups['vms'] }}"
+  delegate_to: localhost
 
-- name: Add provisioned VMs to inventory
+- name: Add provisioned VMs to runtime inventory
   ansible.builtin.add_host:
     name: '{{ item }}'
     groups: provisioned_vms

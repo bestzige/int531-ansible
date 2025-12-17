@@ -15,7 +15,6 @@
   hosts: provisioned_vms
   become: true
   roles:
-    - update_apt
     - ensure_docker
     - node_exporter
     - app_deploy
