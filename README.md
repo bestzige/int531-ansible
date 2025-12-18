@@ -11,7 +11,7 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
 2. **Install Ansible and required collections / roles**
 
 ```bash
-ansible-galaxy role install -r requirements.yml
+ansible-galaxy collection install -r requirements.yml
 ```
 
 3. **Configure inventory and SSH access**
