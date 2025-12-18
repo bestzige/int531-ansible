@@ -10,6 +10,7 @@
     url: 'https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/{{ node_exporter_archive }}'
     dest: '{{ node_exporter_tmp_dir }}/{{ node_exporter_archive }}'
     mode: '0644'
+    checksum: "{{ 'sha256:' + node_exporter_checksum if node_exporter_checksum | length > 0 else omit }}"
 
 - name: Extract node_exporter archive
   ansible.builtin.unarchive:
@@ -42,7 +43,7 @@
       User={{ node_exporter_user }}
       Group={{ node_exporter_user }}
       Type=simple
-      ExecStart={{ node_exporter_install_dir }}/node_exporter
+      ExecStart={{ node_exporter_install_dir }}/node_exporter {{ node_exporter_args }}
       Restart=on-failure
       RestartSec=5
 
@@ -60,3 +61,8 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Wait for node_exporter port
+  ansible.builtin.wait_for:
+    port: 9100
+    timeout: 30

@@ -1,0 +1,22 @@
+- name: Ensure Prometheus target directory exists
+  ansible.builtin.file:
+    path: /etc/prometheus/targets
+    state: directory
+    mode: '0755'
+
+- name: Generate node_exporter targets
+  ansible.builtin.copy:
+    dest: /etc/prometheus/targets/node_exporter.json
+    content: |
+      [
+      {% for host in groups['provisioned_vms'] %}
+        {
+          "targets": ["{{ hostvars[host].ansible_host }}:9100"],
+          "labels": {
+            "instance": "{{ host }}",
+            "job": "node"
+          }
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+      ]
+  notify: reload prometheus
