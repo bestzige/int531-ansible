@@ -33,3 +33,9 @@
     - ensure_docker
     - node_exporter
     - app_deploy
+
+- name: Register prometheus targets
+  hosts: prometheus
+  become: true
+  roles:
+    - prometheus_targets
