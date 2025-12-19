@@ -1,12 +1,17 @@
 - name: Ensure Prometheus target directory exists
   ansible.builtin.file:
-    path: /etc/prometheus/targets
+    path: /opt/monitoring/prometheus/targets
     state: directory
+    owner: root
+    group: root
     mode: '0755'
 
 - name: Generate node_exporter targets
   ansible.builtin.copy:
-    dest: /etc/prometheus/targets/node_exporter.json
+    dest: /opt/monitoring/prometheus/targets/node_exporter.json
+    owner: root
+    group: root
+    mode: '0644'
     content: |
       [
       {% for host in groups['provisioned_vms'] %}
