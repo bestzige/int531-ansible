@@ -8,13 +8,19 @@
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
 ```
 
-2. **Install Ansible and required collections / roles**
+2. **Copy ssh public key to remote hosts**
+
+```bash
+ssh-copy-id -i ~/.ssh/id_rsa.pub <username>@<host-ip>
+```
+
+3. **Install Ansible and required collections / roles**
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
 
-3. **Configure inventory and SSH access**
+4. **Configure inventory and SSH access**
 
 Ensure SSH key-based access works to all hosts:
 
@@ -28,7 +34,7 @@ Verify Ansible connectivity:
 ansible all -m ping
 ```
 
-4. **Run Ansible playbook**
+5. **Run Ansible playbook**
 
 ```bash
 ansible-playbook playbooks/site.yml -v
